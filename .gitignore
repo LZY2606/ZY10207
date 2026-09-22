@@ -34,3 +34,8 @@ coverage/
 .vite/
 .turbo/
 *.tsbuildinfo
+
+# --- 本地 SQLite（层压证明器运行数据，不进交付）---
+*.db
+*.db-wal
+*.db-shm
