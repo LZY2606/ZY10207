@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>层压证明器</title>
+<style>
+  :root { --bg:#f5f6f8; --card:#fff; --line:#dde2e8; --ink:#1f2733; --muted:#66717f;
+          --blue:#2359c6; --red:#c0392b; --green:#1e8449; --amber:#b9770e; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+         background:var(--bg); color:var(--ink); font-size:14px; }
+  header { background:#16263f; color:#fff; padding:14px 22px; display:flex;
+           align-items:center; gap:16px; }
+  header h1 { font-size:18px; margin:0; }
+  header .sub { color:#9db2d0; font-size:12px; }
+  header .tools { margin-left:auto; display:flex; gap:8px; }
+  .wrap { display:grid; grid-template-columns:330px 1fr 420px; gap:14px; padding:14px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:8px;
+          padding:14px; margin-bottom:14px; }
+  .card h2 { font-size:14px; margin:0 0 10px; padding-bottom:8px; border-bottom:1px solid var(--line); }
+  .stack-row { padding:8px 10px; border:1px solid var(--line); border-radius:6px;
+               margin-bottom:6px; cursor:pointer; }
+  .stack-row:hover { border-color:var(--blue); background:#f2f6ff; }
+  .stack-row.active { border-color:var(--blue); background:#e9f0ff; }
+  .stack-row .nm { font-weight:600; }
+  .stack-row .meta { color:var(--muted); font-size:12px; margin-top:2px; }
+  .badge { display:inline-block; font-size:11px; padding:1px 7px; border-radius:10px;
+           background:#eef2f7; color:#3a4757; margin-left:6px; }
+  .badge.v { background:#2359c6; color:#fff; }
+  label.f { display:block; margin:8px 0; font-size:12px; color:var(--muted); }
+  label.f span { display:block; margin-bottom:3px; }
+  input,select { width:100%; padding:6px 8px; border:1px solid var(--line);
+                 border-radius:5px; font-size:13px; font-family:inherit; }
+  .row2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .row3 { display:grid; grid-template-columns:2fr 1fr; gap:8px; }
+  button { cursor:pointer; border:1px solid var(--blue); background:var(--blue); color:#fff;
+           padding:7px 14px; border-radius:6px; font-size:13px; }
+  button.ghost { background:#fff; color:var(--blue); }
+  button.danger { border-color:var(--red); background:var(--red); }
+  button.small { padding:3px 9px; font-size:12px; }
+  .tol { border:1px dashed var(--line); border-radius:6px; padding:8px; margin-top:4px;
+         background:#fbfcfe; }
+  .tol summary { cursor:pointer; font-size:12px; color:var(--blue); }
+  .pill { display:inline-block; font-size:11px; padding:2px 8px; border-radius:10px;
+          margin:2px 4px 2px 0; }
+  .pill.correlated { background:#fdecea; color:var(--red); }
+  .pill.independent { background:#eafaf1; color:var(--green); }
+  .pass { color:var(--green); font-weight:600; }
+  .fail { color:var(--red); font-weight:600; }
+  .reject { background:#fdecea; border:1px solid var(--red); color:#7b241c;
+            padding:10px 12px; border-radius:6px; margin:8px 0; }
+  .diag { background:#fff8e8; border:1px solid var(--amber); color:#7a5409;
+          padding:8px 10px; border-radius:6px; margin:4px 0; font-size:12px; }
+  table { width:100%; border-collapse:collapse; font-size:12px; }
+  th,td { border-bottom:1px solid var(--line); padding:5px 6px; text-align:left; }
+  th { color:var(--muted); font-weight:600; }
+  .muted { color:var(--muted); }
+  .formula { font-family:"SF Mono",Menlo,monospace; background:#f4f6f9; padding:6px 9px;
+             border-radius:5px; font-size:12px; margin:4px 0; }
+  .scroll { max-height:340px; overflow:auto; }
+  .trace-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr));
+                gap:6px; margin-top:6px; }
+  .trace-cell { border:1px solid var(--line); border-radius:5px; padding:5px 7px; font-size:11px; }
+  .trace-cell b { display:block; }
+  .num { font-variant-numeric:tabular-nums; }
+  svg { max-width:100%; border:1px solid var(--line); border-radius:6px; background:#fafafa; }
+  .tabs { display:flex; gap:6px; margin-bottom:10px; }
+  .tabs button { background:#eef2f7; color:#3a4757; border-color:var(--line); }
+  .tabs button.on { background:var(--blue); color:#fff; border-color:var(--blue); }
+  .legend { font-size:11px; color:var(--muted); margin-top:6px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>层压证明器</h1>
+  <span class="sub">走线阻抗叠层审查 · 对称叠层 / IPC-2141 工程公式 / 关联容差组 / 固定种子抽样</span>
+  <div class="tools">
+    <button class="ghost small" onclick="exportData()">导出运行记录</button>
+    <label class="ghost small" style="cursor:pointer;border:1px solid #9db2d0;padding:5px 10px;border-radius:6px;color:#fff">
+      导入复核<input type="file" accept=".json" style="display:none" onchange="importData(event)"/>
+    </label>
+    <button class="danger small" onclick="resetAll()">清空数据库</button>
+  </div>
+</header>
+
+<div class="wrap">
+  <!-- 左列：版本树 -->
+  <div>
+    <div class="card">
+      <h2>叠层 / 材料版本</h2>
+      <div id="stackList"></div>
+      <button class="ghost small" style="margin-top:8px" onclick="newBlank()">＋ 新建叠层</button>
+    </div>
+    <div class="card">
+      <h2>关联容差组（当前版本）</h2>
+      <div id="groupList" class="muted">选择一个叠层版本后显示。</div>
+      <div class="legend">同组因子来自同一工艺/材料批次，最坏角落必须同号，抽样共享一条随机流。</div>
+    </div>
+  </div>
+
+  <!-- 中列：横截面 + 公式 + 编辑器 -->
+  <div>
+    <div class="card">
+      <h2 id="currentTitle">横截面</h2>
+      <div id="section"></div>
+      <div id="nominalBox"></div>
+    </div>
+    <div class="card">
+      <div class="tabs">
+        <button id="tabFormula" class="on" onclick="showTab('formula')">公式与适用域</button>
+        <button id="tabEditor" onclick="showTab('editor')">叠层编辑（产生新版本）</button>
+      </div>
+      <div id="paneFormula">
+        <div id="formulaBox"></div>
+      </div>
+      <div id="paneEditor" style="display:none">
+        <div class="legend" style="margin-bottom:8px">保存即形成<b>新版本</b>（旧版本上的分析结论不会自动重算）。</div>
+        <div id="editorBox"></div>
+        <button onclick="saveRevision()">保存为新版本</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 右列：分析 -->
+  <div>
+    <div class="card">
+      <h2>容差分析</h2>
+      <div class="row2">
+        <label class="f"><span>目标阻抗 (Ω)</span><input id="targetZ" type="number" value="50" step="1"/></label>
+        <label class="f"><span>允许偏差 (%)</span><input id="targetTol" type="number" value="10" step="1"/></label>
+      </div>
+      <div class="row2">
+        <label class="f"><span>种子（抽样）</span><input id="seed" type="number" value="20260922"/></label>
+        <label class="f"><span>样本数</span><input id="samples" type="number" value="200"/></label>
+      </div>
+      <label class="f"><span>分析方式</span>
+        <select id="mode">
+          <option value="WORST_CORNERS">最坏角落（关联组同号）</option>
+          <option value="SAMPLED">固定种子抽样</option>
+        </select>
+      </label>
+      <label class="f" style="color:var(--red)">
+        <input type="checkbox" id="independent" style="width:auto"/> 独立取极值（反例模式：忽略关联组）
+      </label>
+      <button onclick="runAnalysis()">运行分析</button>
+      <div id="runStatus" class="legend"></div>
+    </div>
+    <div class="card">
+      <h2>结论</h2>
+      <div id="summary"></div>
+      <div class="scroll" id="points"></div>
+    </div>
+    <div class="card">
+      <h2>历史运行（本版本，不随新版本重算）</h2>
+      <div id="history" class="scroll"></div>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
